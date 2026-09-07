@@ -7,6 +7,7 @@ import { SetMarkCommand } from "./commands/set-mark-command.js";
 import { CrossRunCommand } from "./commands/cross-run-command.js";
 import { ClearBoardCommand } from "./commands/clear-board-command.js";
 import { buildLevel, levelFromMessage } from "./builder.js";
+import { MAX_LIVES, POINTS_PER_CAT, POINTS_PER_LEVEL } from "./scoring.js";
 import { Emitter } from "./util/emitter.js";
 
 /**
@@ -18,17 +19,18 @@ import { Emitter } from "./util/emitter.js";
  * nothing about each other.
  *
  * The player is on a level, the level decides the board, and finishing one moves
- * them up. Ladder owns that mapping; SaveManager owns the number. The menu's
- * difficulty buttons only choose a level to start on -- nothing else picks a
- * board.
+ * them up. Ladder owns that mapping; SaveManager owns the number.
+ *
+ * Lives and the score belong to the run, not the level. They carry across levels
+ * and only reset when the last life goes, so SaveManager holds them and this
+ * class reads them back whenever a level starts.
  *
  * Generation runs in a Web Worker. Carving regions that admit exactly one
  * solution is a rejection loop, so the main thread stays free to draw the
  * "finding a level" overlay.
  */
 
-/** Wrong cats allowed before the level has to be started again. */
-export const LIVES = 3;
+export { MAX_LIVES } from "./scoring.js";
 
 /**
  * Hints available per level. One: enough to unstick somebody who has genuinely
@@ -92,7 +94,10 @@ export class GameState extends Emitter {
 		this.tier = Grid.Tier.EASY;
 		this.seed = 0;
 		this.selected = -1;
-		this.livesLeft = LIVES;
+		this.livesLeft = saveManager.runLives();
+		this.score = saveManager.runScore();
+		/** Lives spent on the level in play, which the clean-level bonus turns on. */
+		this.mistakesMade = 0;
 		this.hintsUsed = 0;
 		this.elapsed = 0;
 		this.playing = false;
@@ -107,7 +112,7 @@ export class GameState extends Emitter {
 		 * The next level, built while the player works on the current one.
 		 *
 		 * Carving a unique 10x10 Expert board takes seconds, and the shipped bank
-		 * holds only so many -- past level 142 or so it runs dry and every level is
+		 * holds only so many -- past level 111 or so it runs dry and every level is
 		 * generated live. Rather than make the player watch a spinner, the next
 		 * board is built in the background the moment the current one loads. By the
 		 * time they finish, it is already waiting.
@@ -139,7 +144,7 @@ export class GameState extends Emitter {
 	}
 
 	mistakes() {
-		return LIVES - this.livesLeft;
+		return this.mistakesMade;
 	}
 
 	hintsLeft() {
@@ -172,7 +177,7 @@ export class GameState extends Emitter {
 		this.emit("generationStarted", this.levelNumber);
 		// Snapshotted here, on the main thread, so the worker never reaches into
 		// SaveManager while the game is running.
-		const seen = [...this.save.seenFingerprints(Ladder.sizeFor(this.levelNumber))];
+		const seen = [...this.save.seenFingerprints(Ladder.SIZE)];
 		const level = await this._worker.build(this.levelNumber, seen);
 		this._generating = false;
 		if (level === null) {
@@ -190,10 +195,21 @@ export class GameState extends Emitter {
 	 */
 	restartLevel() {
 		if (this.board.level === null || this._generating) return;
-		this._resetFor(this.board.level);
+		// A run that ended takes its penalties with it. One still going keeps
+		// them, so restarting cannot buy back a spent hint or a lost life.
+		const carryOn = this.livesLeft > 0;
+		this._adoptRun();
+		this._resetFor(this.board.level, carryOn);
+	}
+
+	/** Takes the score and the lives from the save, which owns them. */
+	_adoptRun() {
+		this.livesLeft = this.save.runLives();
+		this.score = this.save.runScore();
 	}
 
 	_accept(level) {
+		this._adoptRun();
 		this._resetFor(level);
 		this.save.recordSeen(level.size, level.fingerprint());
 		this.save.recordStarted(this.levelNumber, level.tier);
@@ -223,7 +239,7 @@ export class GameState extends Emitter {
 		this._prefetchedFor = 0;
 
 		this._prefetchRunning = true;
-		const seen = [...this.save.seenFingerprints(Ladder.sizeFor(nextLevel))];
+		const seen = [...this.save.seenFingerprints(Ladder.SIZE)];
 		const level = await this._prefetchWorker.build(nextLevel, seen);
 		this._prefetchRunning = false;
 
@@ -239,15 +255,22 @@ export class GameState extends Emitter {
 		this._prefetchedFor = nextLevel;
 	}
 
-	_resetFor(level) {
+	/**
+	 * Puts a board up ready to play. `carryOn` keeps what this level has already
+	 * cost, so a restart is a fresh board rather than a fresh record: the hint
+	 * stays spent and the lives already lost still rule out the clean bonus.
+	 */
+	_resetFor(level, carryOn = false) {
 		this._clearRun();
 		this.board.setup(level);
 		this.history.clear();
 		this.tier = level.tier;
 		this.seed = level.seed;
 		this.selected = -1;
-		this.livesLeft = LIVES;
-		this.hintsUsed = 0;
+		if (!carryOn) {
+			this.mistakesMade = 0;
+			this.hintsUsed = 0;
+		}
 		this.elapsed = 0;
 		this._lastWholeSecond = -1;
 		this.finished = false;
@@ -270,7 +293,8 @@ export class GameState extends Emitter {
 		this.levelNumber = Math.max(Number(session.level ?? Ladder.FIRST_LEVEL), Ladder.FIRST_LEVEL);
 		this.tier = Number(session.tier ?? Grid.Tier.EASY);
 		this.seed = Number(session.seed ?? 0);
-		this.livesLeft = Math.min(Math.max(Number(session.lives ?? LIVES), 1), LIVES);
+		this._adoptRun();
+		this.mistakesMade = Number(session.mistakes ?? 0);
 		this.hintsUsed = Number(session.hints ?? 0);
 		this.elapsed = Number(session.elapsed ?? 0);
 		this.selected = Number(session.selected ?? -1);
@@ -285,7 +309,8 @@ export class GameState extends Emitter {
 	_announce() {
 		this.emit("levelLoaded");
 		this.emit("selectionChanged", this.selected);
-		this.emit("livesChanged", this.livesLeft, LIVES);
+		this.emit("livesChanged", this.livesLeft, MAX_LIVES);
+		this.emit("scoreChanged", this.score);
 		this.emit("hintsChanged", this.hintsLeft());
 		this.emit("catsChanged", this.board.catsPlaced(), this.size());
 		this.emit("timeChanged", Math.floor(this.elapsed));
@@ -356,7 +381,18 @@ export class GameState extends Emitter {
 		// are exactly the marks a player might change their mind about.
 		this.board.put(index, Grid.Mark.CAT);
 		this.board.notify([index]);
+		this._award(POINTS_PER_CAT);
 		this._checkCompletion();
+	}
+
+	/**
+	 * Adds to the run's score and writes it. Raising the best score is the save's
+	 * job, and the menu is the only screen that shows it.
+	 */
+	_award(points) {
+		this.score += points;
+		this.save.recordRun(this.score, this.livesLeft);
+		this.emit("scoreChanged", this.score);
 	}
 
 	/**
@@ -504,6 +540,7 @@ export class GameState extends Emitter {
 	 * spending a life fair rather than arbitrary.
 	 */
 	_refuseCat(index) {
+		this.mistakesMade += 1;
 		this.livesLeft = Math.max(this.livesLeft - 1, 0);
 		// Marked directly rather than pushed as a command. The cross is not a move
 		// the player made, and undoing their way out of it would make the lost life
@@ -512,13 +549,20 @@ export class GameState extends Emitter {
 		this.board.put(index, Grid.Mark.WRONG);
 		this.board.notify([index]);
 		this.emit("wrongCat", index, message);
-		this.emit("livesChanged", this.livesLeft, LIVES);
-		if (this.livesLeft > 0) return;
+		this.emit("livesChanged", this.livesLeft, MAX_LIVES);
+		if (this.livesLeft > 0) {
+			this.save.recordRun(this.score, this.livesLeft);
+			return;
+		}
 		this.finished = true;
 		this.playing = false;
 		this.save.recordLoss();
+		// The run ends in the save now, so a tab discarded on the result panel
+		// comes back to a fresh one. The score stays on screen until the next
+		// level starts: it is the last thing worth telling the player.
+		this.save.endRun();
 		this.save.clearSession();
-		this.emit("levelFailed");
+		this.emit("levelFailed", this.score);
 	}
 
 	_checkCompletion() {
@@ -526,8 +570,20 @@ export class GameState extends Emitter {
 		this.finished = true;
 		this.playing = false;
 		const seconds = Math.floor(this.elapsed);
-		this.save.recordWin(this.levelNumber, this.tier, seconds, this.mistakes(), this.hintsUsed);
-		this.emit("levelCompleted", this.levelNumber, seconds, this.hintsUsed);
+		// A clean level is one that cost nothing: no life spent on it and no hint
+		// taken. It pays twice over, and hands a life back if there is room for it.
+		const clean = this.mistakesMade === 0 && this.hintsUsed === 0;
+		const regained = clean && this.livesLeft < MAX_LIVES;
+		if (regained) {
+			this.livesLeft += 1;
+			this.emit("livesChanged", this.livesLeft, MAX_LIVES);
+		}
+		this._award(clean ? POINTS_PER_LEVEL * 2 : POINTS_PER_LEVEL);
+		this.save.recordWin(this.levelNumber, this.tier, seconds, this.mistakesMade, this.hintsUsed);
+		// `regained` is what the result card animates: it needs to draw the bar as
+		// it was and then fill the heart in, which it cannot work out from a count
+		// that has already been raised.
+		this.emit("levelCompleted", this.levelNumber, seconds, this.hintsUsed, regained);
 	}
 
 	// --- Plumbing -----------------------------------------------------------
@@ -571,7 +627,7 @@ export class GameState extends Emitter {
 			seed: this.seed,
 			board: this.board.toJSON(),
 			elapsed: this.elapsed,
-			lives: this.livesLeft,
+			mistakes: this.mistakesMade,
 			hints: this.hintsUsed,
 			selected: this.selected,
 			history: this.history.toJSON(),

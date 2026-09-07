@@ -14,8 +14,8 @@
 
 /**
  * One colour per region, and a region count always equals the board size, so
- * there are as many of these as Ladder.LAST_SIZE. Chosen to stay distinguishable
- * when sitting next to each other.
+ * there are as many of these as Ladder.SIZE. Chosen to stay distinguishable when
+ * sitting next to each other.
  */
 export const REGIONS = [
 	"#52a8c0", // teal

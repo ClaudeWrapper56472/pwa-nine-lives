@@ -1,15 +1,14 @@
 import * as Grid from "../puzzle/grid.js";
 import * as Ladder from "../puzzle/ladder.js";
+import { MAX_LIVES } from "../scoring.js";
 import { Emitter } from "../util/emitter.js";
 
 /**
- * Title screen, and three ways off it.
+ * Title screen, and two ways off it.
  *
  * The play button carries on: a suspended level if there is one, otherwise the
  * level the player is on. Below it, and only when the two have parted company,
- * a button back to the furthest level they have reached -- the way back from an
- * easier board. Then Easy, Medium and Hard, which always start their part of the
- * ladder from the beginning.
+ * a button back to the furthest level they have reached.
  *
  * The menu does not decide what carrying on means -- it just reports the press
  * and lets the router work out whether there is a game to resume. All it asks
@@ -24,13 +23,11 @@ export class MenuScreen extends Emitter {
 		this.save = save;
 		this._playButton = root.querySelector("#play-button");
 		this._furthestButton = root.querySelector("#furthest-button");
-		this._startAt = root.querySelector("#start-at");
 		this._stats = root.querySelector("#menu-stats");
 
 		this._playButton.addEventListener("click", () => this.emit("playRequested"));
 		this._furthestButton.addEventListener("click",
 			() => this.emit("levelChosen", this.save.furthestLevel()));
-		this._buildDifficulties();
 		save.on("statsChanged", () => this.refresh());
 		save.on("sessionAvailable", () => this.refresh());
 		this.refresh();
@@ -60,69 +57,32 @@ export class MenuScreen extends Emitter {
 
 	/**
 	 * The way back to the furthest level reached. Hidden while the play button is
-	 * already offering it, which is the usual case: the two only part company
-	 * after a difficulty button drops the player onto an easier board.
+	 * already offering it, which is the usual case. The two only part company in a
+	 * save carried over from a version that let the player drop to an easier board.
 	 */
 	_renderFurthest(carryingOn) {
 		const furthest = this.save.furthestLevel();
 		this._furthestButton.hidden = furthest === carryingOn;
 		if (this._furthestButton.hidden) return;
-		const size = Ladder.sizeFor(furthest);
 		this._furthestButton.textContent =
-			`Back to level ${furthest}  ·  ${Grid.tierName(Ladder.tierFor(furthest))} ${size}×${size}`;
-	}
-
-	/**
-	 * The difficulty row. Each button starts its part of the ladder from the
-	 * beginning, whatever the player has done since, so the labels are fixed and
-	 * are written once here.
-	 */
-	_buildDifficulties() {
-		const heading = document.createElement("h2");
-		heading.textContent = "Start at";
-
-		const row = document.createElement("div");
-		row.className = "difficulty";
-		row.setAttribute("role", "group");
-		row.setAttribute("aria-label", "Start at a difficulty");
-
-		for (const entry of Ladder.DIFFICULTIES) {
-			const start = Ladder.firstLevelAtSize(entry.size);
-			const button = document.createElement("button");
-			button.type = "button";
-			const level = document.createElement("span");
-			level.className = "level";
-			level.textContent = `Level ${start}`;
-			const size = document.createElement("span");
-			size.className = "size";
-			size.textContent = `${entry.size}×${entry.size}`;
-			button.append(document.createTextNode(entry.name), level, size);
-			// The × needs saying in words for a screen reader.
-			button.setAttribute("aria-label",
-				`${entry.name}: level ${start}, a ${entry.size} by ${entry.size} board`);
-			button.addEventListener("click", () => this.emit("levelChosen", start));
-			row.append(button);
-		}
-
-		this._startAt.replaceChildren(heading, row);
+			`Back to level ${furthest}  ·  ${Grid.tierName(Ladder.tierFor(furthest))}`;
 	}
 
 	_renderStats() {
 		const level = this.save.playingLevel();
-		const size = Ladder.sizeFor(level);
 		const completed = this.save.levelsCompleted();
 		const streak = this.save.stats().streak ?? {};
 		const run = Number(streak.current ?? 0);
 		const bestRun = Number(streak.best ?? 0);
 
 		const lines = [
-			`On level ${level}  ·  ${Grid.tierName(Ladder.tierFor(level))} ${size}×${size}`,
+			`On level ${level}  ·  ${Grid.tierName(Ladder.tierFor(level))} ${Ladder.SIZE}×${Ladder.SIZE}`,
+			`Score ${this.save.runScore()}  ·  best ${this.save.highScore()}`,
+			`${this.save.runLives()} of ${MAX_LIVES} lives`,
 			`${completed} level${completed === 1 ? "" : "s"} finished`,
 		];
 		if (run > 0) lines.push(`${run} in a row (best ${bestRun})`);
 		else if (bestRun > 0) lines.push(`Best run ${bestRun} in a row`);
-		const nextSize = Ladder.nextStepUp(level);
-		if (nextSize > 0) lines.push(`Bigger board at level ${nextSize}`);
 
 		this._stats.replaceChildren();
 		const heading = document.createElement("h2");

@@ -29,8 +29,50 @@
 	<!-- Hidden until the script has read the save and written the button label,
 	     so the menu never appears with a stale one. The boot panel covers the gap. -->
 	<div id="boot-panel" class="overlay solid">
-		<p>Loading…</p>
+		<p id="boot-message">Loading…</p>
+		<p id="boot-detail" class="boot-detail" hidden></p>
 	</div>
+
+	<!--
+	  Classic and inline, so it runs even when the module below never does. A
+	  module that fails to parse, fails to import or throws on the way up takes
+	  the boot panel with it, and a screen reading "Loading…" for ever says
+	  nothing about why. Anything thrown before the app clears the panel is
+	  written into it instead.
+
+	  ES5 throughout: whatever syntax the module choked on, this has to survive it.
+	-->
+	<script>
+	(function () {
+		function report(text) {
+			var message = document.getElementById("boot-message");
+			var detail = document.getElementById("boot-detail");
+			// Gone means the app started and cleared the panel; a later error is
+			// the running game's business, not the boot screen's.
+			if (!message || !detail) return;
+			message.textContent = "Could not start";
+			detail.textContent = text;
+			detail.hidden = false;
+		}
+		window.addEventListener("error", function (event) {
+			var target = event.target;
+			if (target && target !== window && (target.src || target.href)) {
+				report("Could not load " + (target.src || target.href));
+				return;
+			}
+			var where = event.filename
+				? " (" + String(event.filename).split("/").pop() + ":" + event.lineno + ")"
+				: "";
+			report((event.message || "Script error") + where);
+		// Capturing, because a stylesheet or module that 404s fires an error that
+		// never reaches window on its own.
+		}, true);
+		window.addEventListener("unhandledrejection", function (event) {
+			var reason = event.reason;
+			report("Unhandled: " + ((reason && (reason.message || reason)) || "rejection"));
+		});
+	})();
+	</script>
 
 	<section id="menu-screen" class="screen menu" hidden>
 		<img class="mascot" src="art/mascot.png" alt="A grinning cat" width="810" height="656">
@@ -40,9 +82,6 @@
 		<!-- Shown only when the play button is offering a different level, so the
 		     menu says "carry on" once rather than twice. -->
 		<button id="furthest-button" type="button" hidden>Back to level 1</button>
-		<!-- Built from Ladder.DIFFICULTIES, so which level each one starts cannot
-		     drift from the ladder that decides the boards. -->
-		<div id="start-at" class="start-at"></div>
 		<div id="menu-stats" class="stats"></div>
 	</section>
 
@@ -53,9 +92,18 @@
 		<div class="play-area">
 			<header class="header-row">
 				<span id="tier-label" class="tier">Level 1</span>
-				<span id="lives" class="lives" role="img" aria-label="3 of 3 lives left"></span>
 				<span id="time-label" class="time">0:00</span>
 			</header>
+
+			<!-- Lives and score share a row of their own: nine hearts do not fit
+			     beside the level caption on a phone. The best score is the menu's
+			     to show. -->
+			<div class="run-row">
+				<span id="lives" class="lives" role="img" aria-label="9 of 9 lives left"></span>
+				<span id="score-label" class="score">
+					<b id="score-value">0</b>
+				</span>
+			</div>
 
 			<!-- The grid keeps itself square, so the header packs directly above it
 			     and the cat count directly below however tall the screen is.
@@ -89,6 +137,10 @@
 				<img class="mascot" src="art/mascot.png" alt="" width="810" height="656">
 				<h2 id="result-title">Level done</h2>
 				<p id="result-detail"></p>
+				<!-- The whole bar, spent lives included, so the card says what the
+				     run has left rather than only what this level cost. -->
+				<span id="result-lives" class="lives" role="img"
+					aria-label="9 of 9 lives left"></span>
 				<button id="again-button" type="button" class="primary">Next level</button>
 				<button id="result-menu-button" type="button">Menu</button>
 			</div>

@@ -14,7 +14,7 @@ import { Rng } from "./util/rng.js";
 export async function buildLevel(targetLevel, seenList) {
 	await Bank.load();
 	const tier = Ladder.tierFor(targetLevel);
-	const size = Ladder.sizeFor(targetLevel);
+	const size = Ladder.SIZE;
 	const minRegion = Ladder.minRegionCells(targetLevel);
 	const seen = new Set(seenList.map(Number));
 	const rng = new Rng(Rng.randomSeed());

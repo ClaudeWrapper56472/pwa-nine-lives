@@ -17,7 +17,7 @@
  * Content -- the art, the icons, the level bank -- is served cache-first. It is
  * the bulk of the bytes and it only changes when its filename does.
  */
-const CACHE = "nine-lives-v4";
+const CACHE = "nine-lives-v5";
 
 /** Files whose freshness matters more than the round trip to check it. */
 const CODE = /\.(?:html|js|css|webmanifest)$/;
@@ -39,6 +39,7 @@ const ASSETS = [
 	"js/puzzle-state.js",
 	"js/save-manager.js",
 	"js/save-migration.js",
+	"js/scoring.js",
 	"js/settings.js",
 	"js/worker.js",
 	"js/commands/clear-board-command.js",

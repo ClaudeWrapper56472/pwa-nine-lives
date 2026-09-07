@@ -18,21 +18,35 @@ it gets the cheap gesture — and it is free, a note to yourself that is never
 checked.
 
 **Double tap a cell** to place a cat. That is the committing move and the only one
-that costs anything: a cat on the wrong cell is refused and **spends one of three
-lives**. Lose all three and you start that same level again. The first of the two
-taps crosses the cell out, so a cat shows a cross for a moment on its way down —
-the alternative is every cross waiting to see whether a second tap follows, and
-crossing out is far too common to make it wait.
+that costs anything: a cat on the wrong cell is refused and **spends a life**. The
+first of the two taps crosses the cell out, so a cat shows a cross for a moment on
+its way down — the alternative is every cross waiting to see whether a second tap
+follows, and crossing out is far too common to make it wait.
 
-Level 1 is a gentle 5×5 and every level after it is a little harder. Finishing one
-moves you up; losing one does not move you back. **Easy, Medium and Hard** on the
-menu are three places to join that one ladder rather than three separate settings:
-the first 5×5, 7×7 and 9×9 board, always from the beginning of that stretch.
+## Lives and score
 
-Dropping back to an easier board does not cost you anything. The save keeps two
-numbers -- the level you are playing and the furthest you have reached -- and the
-menu offers a way back to the furthest one whenever the play button is carrying on
-from somewhere else.
+Every board is 10×10. What climbs is the reasoning: the techniques a level asks
+for ramp from Easy to Expert over the first 28 levels and stay at Expert after
+that. Finishing a level moves you up; losing one does not move you back.
+
+Lives and points belong to the **run**, not the level, so a wrong cat costs
+something beyond the board it happens on.
+
+| | |
+| --- | --- |
+| Placing a cat | **+10** |
+| Finishing a level | **+100** |
+| Finishing one clean — no life spent, no hint taken | **+200**, and a life back |
+| A cat on the wrong cell | **−1 life** |
+| Running out of all nine lives | score back to **zero**, lives back to nine |
+
+A run starts on nine lives. The clean-level bonus is the only way to earn one
+back, and it never takes you past nine. The high score survives a run ending —
+it is the only number that never goes down.
+
+Restarting a level gives you the same board again, not a clean record: a life
+already spent on it stays spent, and a hint already taken stays taken. Otherwise
+restarting would buy back the clean bonus for nothing.
 
 **Keyboard:** arrows move, `Space`/`X` crosses out, `Enter`/`C` places a cat,
 `Backspace` clears, `H` hints, `Cmd`/`Ctrl`+`Z` undoes, `Esc` leaves. The selected
@@ -54,12 +68,13 @@ Installing it from the browser's Add to Home Screen gives a standalone portrait
 app that plays offline.
 
 ```bash
-node tests/verify.mjs      # 115 assertions over the puzzle layer, about a second
+node tests/verify.mjs      # 140 assertions over the puzzle layer, about a second
 ```
 
 The self-check needs Node 18 or newer (`structuredClone`, `crypto`). It runs the
-whole puzzle layer headlessly, and verifies every one of the 320 shipped levels
-is legal, uniquely solvable and rated to the tier it is filed under.
+whole puzzle layer headlessly, verifies every one of the 320 shipped levels is
+legal, uniquely solvable and rated to the tier it is filed under, and plays a
+board through GameState to check the scoring and the lives.
 
 ## Deploying
 
@@ -86,7 +101,7 @@ js/puzzle/               Pure puzzle logic. No DOM, so it all runs under Node.
   solver.js              Row-by-row search, solution counting, rival finding
   generator.js           Placement, region carving, uniqueness repair
   rater.js               Technique-by-technique logical solver
-  ladder.js              Level number -> which board to generate
+  ladder.js              Level number -> which tier to generate
   bank.js                Reads precomputed levels from content/
 
 js/commands/             Undo system
@@ -101,6 +116,7 @@ js/
   puzzle-state.js        The board model commands act on
   save-manager.js        The save document in localStorage, plus suspend hooks
   save-migration.js      Pure version-migration functions
+  scoring.js             Lives and point values, shared by the game and the save
   settings.js            Preferences
   builder.js             Bank-then-generate, shared by page and worker
   worker.js              Level generation off the main thread

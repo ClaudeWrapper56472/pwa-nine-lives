@@ -1,5 +1,6 @@
 import * as Ladder from "./puzzle/ladder.js";
 import * as Migration from "./save-migration.js";
+import { MAX_LIVES } from "./scoring.js";
 import { Emitter } from "./util/emitter.js";
 
 /**
@@ -156,6 +157,50 @@ export class SaveManager extends Emitter {
 
 	levelsCompleted() {
 		return Number(this.progress().completed ?? 0);
+	}
+
+	// --- The run ------------------------------------------------------------
+
+	run() {
+		return this.stats().run ?? Migration.emptyRun();
+	}
+
+	runScore() {
+		return Number(this.run().score ?? 0);
+	}
+
+	runLives() {
+		return Number(this.run().lives ?? MAX_LIVES);
+	}
+
+	highScore() {
+		return Number(this.stats().high_score ?? 0);
+	}
+
+	/**
+	 * Writes where the run stands. The high score is raised here rather than by
+	 * the caller: it is the one number that must never be able to go down, so the
+	 * only code that can move it is the code that sees every score.
+	 */
+	recordRun(score, lives) {
+		const stats = this.stats();
+		stats.run = {
+			score: Math.max(score, 0),
+			lives: Math.min(Math.max(lives, 0), MAX_LIVES),
+		};
+		stats.high_score = Math.max(Number(stats.high_score ?? 0), stats.run.score);
+		this._document.stats = stats;
+		this._write();
+		this.emit("statsChanged");
+	}
+
+	/** The last life is gone. The score goes back to zero; the best of them stays. */
+	endRun() {
+		const stats = this.stats();
+		stats.run = Migration.emptyRun();
+		this._document.stats = stats;
+		this._write();
+		this.emit("statsChanged");
 	}
 
 	load() {

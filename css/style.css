@@ -198,51 +198,6 @@ button:disabled {
 	text-wrap: balance;
 }
 
-/* Three ways onto the ladder, three across a phone. */
-.start-at {
-	margin-top: 0.375rem;
-}
-
-.start-at h2 {
-	margin: 0 0 0.375rem;
-	font-size: 1em;
-	font-weight: 700;
-}
-
-.difficulty {
-	display: grid;
-	grid-template-columns: repeat(3, 1fr);
-	gap: 0.5rem;
-}
-
-.difficulty button {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	justify-content: center;
-	gap: 0.1rem;
-	min-height: 3rem;
-	padding-inline: 0.375rem;
-}
-
-/*
- * Two lines under the name rather than one wrapping line: at three buttons to a
- * phone's width, "Level 120 · 10×10" breaks wherever it likes and leaves the
- * separator stranded. Both inherit their colour, so they follow the button
- * through hover and press.
- */
-.difficulty .level {
-	font-size: 0.8em;
-	line-height: 1.2;
-	opacity: 0.85;
-}
-
-.difficulty .size {
-	font-size: 0.7em;
-	line-height: 1.2;
-	opacity: 0.6;
-}
-
 .stats {
 	color: var(--ink-soft);
 	margin-top: 0.5rem;
@@ -266,15 +221,12 @@ button:disabled {
  */
 @media (max-height: 34rem) {
 	/*
-	 * The art has shrunk to nothing by this height anyway. The tag line and both
-	 * headings go with it: three buttons reading Easy, Medium and Hard say what
-	 * they are, the progress lines say what they are, and the difficulty group
-	 * keeps its label for a screen reader. Without this the stack runs past the
-	 * bottom of a landscape phone.
+	 * The art has shrunk to nothing by this height anyway. The tag line and the
+	 * heading go with it: the progress lines say what they are. Without this the
+	 * stack runs past the bottom of a landscape phone.
 	 */
 	.menu .mascot,
 	.menu .subtitle,
-	.start-at h2,
 	.stats h2,
 	.card .mascot {
 		display: none;
@@ -338,15 +290,39 @@ button:disabled {
 	font-variant-numeric: tabular-nums;
 }
 
-.lives {
+.run-row {
 	display: flex;
-	gap: 0.3rem;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
 }
 
+.score {
+	display: flex;
+	align-items: baseline;
+	gap: 0.4rem;
+	font-variant-numeric: tabular-nums;
+}
+
+.score b {
+	font-size: 1.05rem;
+	font-weight: 700;
+}
+
+.lives {
+	display: flex;
+	gap: 0.22rem;
+}
+
+/* Nine of these sit in a row on a phone, so they are smaller than a lone icon
+   would want to be. */
 .heart {
-	width: 1.35rem;
+	width: 1.05rem;
 	height: auto;
 	fill: var(--wrong);
+	/* A life coming back fades in rather than snapping on. Losing one fades out
+	   by the same rule. */
+	transition: opacity 420ms ease-out;
 }
 
 /*
@@ -555,6 +531,23 @@ button:disabled {
 	margin: 0;
 }
 
+/* Two lines stacked, not sat side by side: the overlay centres a row by default. */
+#boot-panel {
+	flex-direction: column;
+}
+
+/* The reason the boot panel is still up. Long, and often a file name and a line
+   number, so it wraps anywhere rather than pushing the panel sideways. */
+.boot-detail {
+	max-width: 22rem;
+	margin-top: 0.75rem;
+	color: var(--wrong);
+	font-size: 0.85em;
+	line-height: 1.4;
+	text-align: center;
+	overflow-wrap: anywhere;
+}
+
 .card {
 	display: flex;
 	flex-direction: column;
@@ -572,6 +565,51 @@ button:disabled {
 
 .card .mascot {
 	max-height: 26vh;
+}
+
+/* Bigger than the top bar's, and centred: on the card the bar is the thing being
+   looked at rather than a corner reading. */
+.card .lives {
+	justify-content: center;
+	gap: 0.3rem;
+}
+
+.card .heart {
+	width: 1.4rem;
+}
+
+/*
+ * The beat on a life handed back for a clean board. It arrives with the fade
+ * above, and the pounce is what makes it the thing you look at.
+ */
+@keyframes heart-returns {
+	0%   { scale: 1; }
+	35%  { scale: 1.5; }
+	60%  { scale: 0.95; }
+	100% { scale: 1; }
+}
+
+.heart.is-returning {
+	animation: heart-returns 520ms ease-out;
+}
+
+/*
+ * The heart that flies in for a life earned back. Fixed to the viewport and above
+ * every overlay: it starts at the top of the screen and lands inside the card.
+ *
+ * Its position, size and fade are all driven from script, so the only thing said
+ * here is where it sits in the stack and that it never takes a tap meant for the
+ * button underneath it.
+ */
+.flying-heart {
+	position: fixed;
+	top: 0;
+	left: 0;
+	z-index: 10;
+	transform-origin: 50% 50%;
+	transition: none;
+	pointer-events: none;
+	filter: drop-shadow(0 6px 12px rgb(76 59 49 / 30%));
 }
 
 .card h2 {
@@ -630,5 +668,14 @@ button:disabled {
 	   The lift has to go with the movement that earned it. */
 	.cell.is-placing {
 		z-index: auto;
+	}
+
+	/* The heart still comes back; it just arrives rather than bouncing in. */
+	.heart {
+		transition: none;
+	}
+
+	.heart.is-returning {
+		animation: none;
 	}
 }

@@ -24,6 +24,7 @@ import * as Generator from "../js/puzzle/generator.js";
 import * as Ladder from "../js/puzzle/ladder.js";
 import * as Bank from "../js/puzzle/bank.js";
 import * as Migration from "../js/save-migration.js";
+import { MAX_LIVES, POINTS_PER_CAT, POINTS_PER_LEVEL } from "../js/scoring.js";
 import { CatLevel } from "../js/puzzle/level.js";
 import { PuzzleState } from "../js/puzzle-state.js";
 import { UndoStack } from "../js/commands/undo-stack.js";
@@ -31,6 +32,8 @@ import { SetMarkCommand } from "../js/commands/set-mark-command.js";
 import { CrossRunCommand } from "../js/commands/cross-run-command.js";
 import { ClearBoardCommand } from "../js/commands/clear-board-command.js";
 import { Rng } from "../js/util/rng.js";
+import { GameState } from "../js/game-state.js";
+import { Emitter } from "../js/util/emitter.js";
 
 const TUTORIAL_REGIONS = "ABCBABBBAADBADDB";
 const TUTORIAL_COLUMNS = [2, 0, 3, 1];
@@ -61,6 +64,13 @@ function eq(message, actual, expected) {
 }
 
 const tutorialRegions = () => Grid.regionsFromString(TUTORIAL_REGIONS);
+
+/** Cells in the smallest colour of a stored region string. */
+function smallestRegion(regions) {
+	const counts = new Map();
+	for (const ch of regions) counts.set(ch, (counts.get(ch) ?? 0) + 1);
+	return Math.min(...counts.values());
+}
 
 // --- The rules --------------------------------------------------------------
 
@@ -126,48 +136,39 @@ group("Solver");
 group("Ladder");
 {
 	eq("level 1 is Easy", Ladder.tierFor(Ladder.FIRST_LEVEL), Grid.Tier.EASY);
-	eq("on the smallest board", Ladder.sizeFor(Ladder.FIRST_LEVEL), Ladder.FIRST_SIZE);
+	eq("the board is a 10x10", Ladder.SIZE, 10);
+	check("and one the grid can build",
+		Ladder.SIZE >= Grid.MIN_SIZE && Ladder.SIZE <= Grid.MAX_SIZE);
 
-	for (const [level, size] of Object.entries({ 1: 5, 11: 6, 26: 7, 46: 8, 70: 9, 100: 10 })) {
-		eq(`level ${level} is a ${size}x${size}`, Ladder.sizeFor(Number(level)), size);
+	for (const [level, tier] of Object.entries({
+		1: Grid.Tier.EASY,
+		8: Grid.Tier.MEDIUM,
+		15: Grid.Tier.HARD,
+		22: Grid.Tier.EXPERT,
+	})) {
+		eq(`level ${level} is ${Grid.tierName(tier)}`, Ladder.tierFor(Number(level)), tier);
 	}
-	eq("the largest board starts at level 100", Ladder.finalSizeLevel(), 100);
 
-	let lastSize = 0;
-	let ok = true;
-	for (let level = 1; level < 400; level += 1) {
-		const size = Ladder.sizeFor(level);
-		if (size < lastSize || size < Grid.MIN_SIZE || size > Grid.MAX_SIZE) ok = false;
-		lastSize = size;
-	}
-	check("the board never shrinks and stays buildable", ok);
-
-	let start = Ladder.FIRST_LEVEL;
 	let ramps = true;
-	for (const span of Ladder.LEVELS_PER_SIZE) {
-		if (Ladder.tierFor(start) !== Grid.Tier.EASY) ramps = false;
-		if (Ladder.tierFor(start + span - 1) !== Grid.Tier.EXPERT) ramps = false;
-		let lastTier = -1;
-		for (let level = start; level < start + span; level += 1) {
-			if (Ladder.tierFor(level) < lastTier) ramps = false;
-			lastTier = Ladder.tierFor(level);
-		}
-		start += span;
+	let lastTier = -1;
+	for (let level = Ladder.FIRST_LEVEL; level < 400; level += 1) {
+		const tier = Ladder.tierFor(level);
+		if (tier < lastTier || tier > Grid.Tier.EXPERT) ramps = false;
+		lastTier = tier;
 	}
-	check("every size ramps Easy to Expert without dipping", ramps);
+	check("the tier climbs without dipping and stops at Expert", ramps);
 
-	eq("the levels keep climbing past the last board",
-		Ladder.sizeFor(5100), Ladder.LAST_SIZE);
+	eq("the ramp reaches Expert on its last level",
+		Ladder.tierFor(Ladder.RAMP_LEVELS), Grid.Tier.EXPERT);
+	eq("and stays there however far the levels run",
+		Ladder.tierFor(5100), Grid.Tier.EXPERT);
 	eq("single-square colours stop at the advertised level",
 		Ladder.minRegionCells(Ladder.NO_SINGLE_CELL_REGIONS_FROM), 2);
 	eq("and are allowed before it",
 		Ladder.minRegionCells(Ladder.NO_SINGLE_CELL_REGIONS_FROM - 1), 1);
 
-	for (const entry of Ladder.DIFFICULTIES) {
-		const level = Ladder.firstLevelAtSize(entry.size);
-		eq(`${entry.name} opens on a ${entry.size}x${entry.size}`, Ladder.sizeFor(level), entry.size);
-		eq(`${entry.name} opens at the gentle end of it`, Ladder.tierFor(level), Grid.Tier.EASY);
-	}
+	check("every board the ladder asks for is the one size",
+		Ladder.combinations().every((spec) => spec.size === Ladder.SIZE));
 }
 
 // --- Rating -----------------------------------------------------------------
@@ -302,19 +303,24 @@ group("Level bank");
 	check("every shipped level rates to the tier it is filed under", rated);
 
 	// Every board the ladder can ask for must be in the bank, or a player hits a
-	// stutter while the game generates one live.
+	// stutter while the game generates one live. The minimum colour size counts:
+	// past NO_SINGLE_CELL_REGIONS_FROM the bank is filtered down to the entries
+	// that have no one-square colour, and those have to exist.
 	let covered = true;
 	for (const spec of Ladder.combinations()) {
-		const found = Bank.entriesFor(spec.tier).some((entry) => Number(entry.size) === spec.size);
+		const found = Bank.entriesFor(spec.tier).some((entry) =>
+			Number(entry.size) === spec.size
+			&& smallestRegion(String(entry.regions ?? "")) >= spec.minRegion);
 		if (!found) covered = false;
 	}
 	check("the bank covers every board the ladder asks for", covered);
 
 	const rng = new Rng(4242);
-	const drawn = Bank.take(Grid.Tier.HARD, rng, 7);
-	check("a level can be drawn from the bank", drawn !== null && drawn.size === 7);
+	const drawn = Bank.take(Grid.Tier.HARD, rng, Ladder.SIZE);
+	check("a level can be drawn from the bank",
+		drawn !== null && drawn.size === Ladder.SIZE);
 	const fingerprint = drawn.fingerprint();
-	const again = Bank.take(Grid.Tier.HARD, rng, 7, new Set([fingerprint]));
+	const again = Bank.take(Grid.Tier.HARD, rng, Ladder.SIZE, new Set([fingerprint]));
 	check("and a board already seen is skipped",
 		again !== null && again.fingerprint() !== fingerprint);
 }
@@ -525,15 +531,34 @@ group("Save migration");
 	eq("a v3 session is dropped rather than mislabelled", Object.keys(v4.session).length, 0);
 	eq("and the level to resume on comes from total wins", v4.stats.progress.level, 13);
 
+	const v5 = Migration.migrateV4ToV5({
+		version: 4,
+		session: { level: 12, lives: 2, hints: 1 },
+		stats: Migration.emptyStats(),
+	});
+	eq("a v5 run starts on a full bar", v5.stats.run.lives, MAX_LIVES);
+	eq("with nothing scored yet", v5.stats.run.score, 0);
+	eq("and no high score to beat", v5.stats.high_score, 0);
+	eq("a suspended level keeps the mistakes its lives were counting",
+		v5.session.mistakes, 1);
+	check("and stops carrying lives of its own", !("lives" in v5.session));
+
 	check("a document with no version is discarded",
 		Object.keys(Migration.migrate({ stats: { anything: 1 } }).session).length === 0);
 	check("so is one from a newer build",
 		Migration.migrate({ version: 99, stats: { hints_used: 5 } }).stats.hints_used === 0);
 
-	const normalized = Migration.normalize({ version: 4, session: {}, stats: {} });
+	const normalized = Migration.normalize({ version: 5, session: {}, stats: {} });
 	check("normalize fills in every block a partial document is missing",
 		"tiers" in normalized.stats && "streak" in normalized.stats
-		&& "progress" in normalized.stats && "seen" in normalized.stats);
+		&& "progress" in normalized.stats && "seen" in normalized.stats
+		&& "run" in normalized.stats && "high_score" in normalized.stats);
+	eq("a run cannot hold more lives than the rules allow",
+		Migration.normalize({ stats: { run: { score: 10, lives: 99 } } }).stats.run.lives,
+		MAX_LIVES);
+	eq("and the high score is never behind the score being played",
+		Migration.normalize({ stats: { run: { score: 250, lives: 4 }, high_score: 10 } })
+			.stats.high_score, 250);
 	eq("a day-counting streak is reset rather than reinterpreted",
 		Migration.normalize({ version: 4, session: {}, stats: {
 			streak: { current: 9, best: 12, last_win_day: 1234 },
@@ -561,6 +586,151 @@ group("Seeded randomness");
 	for (let i = 0; i < 5000; i += 1) counts[spread.randiRange(0, 4)] += 1;
 	check("randiRange covers its whole inclusive span",
 		[...counts].every((count) => count > 800));
+}
+
+
+// --- Scoring and lives ------------------------------------------------------
+
+/**
+ * Enough of a SaveManager for GameState to run against: it holds the run and
+ * counts what it was told, and touches no storage. The real one is checked by
+ * the migration group above.
+ */
+class FakeSave extends Emitter {
+	constructor(lives = MAX_LIVES, score = 0) {
+		super();
+		this.stored = { score, lives };
+		this.high = score;
+		this.wins = [];
+		this.losses = 0;
+		this.runsEnded = 0;
+	}
+
+	runLives() { return this.stored.lives; }
+	runScore() { return this.stored.score; }
+	highScore() { return this.high; }
+
+	recordRun(score, lives) {
+		this.stored = { score, lives };
+		this.high = Math.max(this.high, score);
+	}
+
+	endRun() {
+		this.runsEnded += 1;
+		this.stored = { score: 0, lives: MAX_LIVES };
+	}
+
+	recordWin(level, tier, seconds, mistakes, hints) {
+		this.wins.push({ level, mistakes, hints });
+	}
+
+	recordLoss() { this.losses += 1; }
+
+	playingLevel() { return 1; }
+	hasSession() { return false; }
+	session() { return {}; }
+	seenFingerprints() { return new Set(); }
+	clearSession() {}
+	recordSeen() {}
+	recordStarted() {}
+	submitSession() {}
+	flush() {}
+}
+
+function tutorialLevel() {
+	const level = new CatLevel();
+	level.size = SIZE;
+	level.regions = tutorialRegions();
+	level.columns = Uint8Array.from(TUTORIAL_COLUMNS);
+	level.tier = Grid.Tier.EASY;
+	return level;
+}
+
+/** A game sitting on the tutorial board, with its clock stopped. */
+function startedGame(lives = MAX_LIVES, score = 0) {
+	const save = new FakeSave(lives, score);
+	const game = new GameState(save);
+	clearInterval(game._tickHandle);
+	game._accept(tutorialLevel());
+	return { game, save };
+}
+
+/** Every cell that is not part of the answer, in order. */
+function wrongCells(level) {
+	const out = [];
+	for (let index = 0; index < SIZE * SIZE; index += 1) {
+		if (!level.isSolutionCell(index)) out.push(index);
+	}
+	return out;
+}
+
+function solve(game) {
+	for (let row = 0; row < SIZE; row += 1) game.toggleCat(game.board.level.solutionIndex(row));
+}
+
+group("Scoring and lives");
+{
+	const { game } = startedGame();
+	eq("a run starts on a full bar", game.livesLeft, MAX_LIVES);
+	eq("with nothing scored", game.score, 0);
+
+	const first = game.board.level.solutionIndex(0);
+	game.toggleCat(first);
+	eq("a cat is worth its points", game.score, POINTS_PER_CAT);
+	game.toggleCat(first);
+	eq("and tapping it again pays nothing", game.score, POINTS_PER_CAT);
+
+	// Three cats left on a four-row board, then the level bonus.
+	const { game: clean, save: cleanSave } = startedGame();
+	solve(clean);
+	check("a solved board is finished", clean.finished);
+	eq("a clean level pays double",
+		clean.score, POINTS_PER_CAT * SIZE + POINTS_PER_LEVEL * 2);
+	eq("and cannot push the bar past full", clean.livesLeft, MAX_LIVES);
+	eq("the win was recorded with no mistakes", cleanSave.wins[0].mistakes, 0);
+
+	const { game: hurt } = startedGame(MAX_LIVES - 2);
+	eq("a run resumes on the lives it had left", hurt.livesLeft, MAX_LIVES - 2);
+	solve(hurt);
+	eq("a clean level hands one life back", hurt.livesLeft, MAX_LIVES - 1);
+	eq("and still pays double", hurt.score, POINTS_PER_CAT * SIZE + POINTS_PER_LEVEL * 2);
+
+	const { game: slipped } = startedGame(MAX_LIVES - 2);
+	slipped.toggleCat(wrongCells(slipped.board.level)[0]);
+	eq("a wrong cat costs a life", slipped.livesLeft, MAX_LIVES - 3);
+	eq("and scores nothing", slipped.score, 0);
+	solve(slipped);
+	eq("a level with a mistake pays once",
+		slipped.score, POINTS_PER_CAT * SIZE + POINTS_PER_LEVEL);
+	eq("and hands no life back", slipped.livesLeft, MAX_LIVES - 3);
+
+	// A hint places a cat itself, so the board finishes a cat short of the full
+	// placement points as well as short of the bonus.
+	const { game: hinted } = startedGame(MAX_LIVES - 1);
+	hinted.useHint();
+	solve(hinted);
+	check("a hinted board still completes", hinted.finished);
+	eq("but it is not clean, so no life comes back", hinted.livesLeft, MAX_LIVES - 1);
+
+	const { game: doomed, save: doomedSave } = startedGame(2, 500);
+	const wrong = wrongCells(doomed.board.level);
+	doomed.toggleCat(wrong[0]);
+	doomed.toggleCat(wrong[1]);
+	eq("the last life goes", doomed.livesLeft, 0);
+	check("which ends the level", doomed.finished);
+	eq("the run was ended in the save", doomedSave.runsEnded, 1);
+	eq("the score went back to zero", doomedSave.stored.score, 0);
+	eq("on a full bar again", doomedSave.stored.lives, MAX_LIVES);
+	eq("and the best score survived it", doomedSave.highScore(), 500);
+
+	// Restarting is a fresh board, not a fresh record.
+	const { game: retried } = startedGame(MAX_LIVES);
+	retried.toggleCat(wrongCells(retried.board.level)[0]);
+	retried.restartLevel();
+	eq("a restart keeps the lives already spent", retried.livesLeft, MAX_LIVES - 1);
+	solve(retried);
+	eq("and the level it restarted cannot count as clean",
+		retried.livesLeft, MAX_LIVES - 1);
 }
 
 // --- Result -----------------------------------------------------------------

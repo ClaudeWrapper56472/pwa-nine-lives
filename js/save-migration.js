@@ -1,5 +1,6 @@
 import * as Grid from "./puzzle/grid.js";
 import * as Ladder from "./puzzle/ladder.js";
+import { MAX_LIVES } from "./scoring.js";
 import { CatLevel } from "./puzzle/level.js";
 
 /**
@@ -26,9 +27,12 @@ import { CatLevel } from "./puzzle/level.js";
  *      Commands are single-cell.
  *   4  One climbing progression instead of a difficulty menu. Stats gain a
  *      progress block; the session records its level.
+ *   5  One board size, and a scored run. Stats gain a run block and a high
+ *      score; the session counts its mistakes instead of its lives, which are
+ *      now the run's.
  */
 
-export const CURRENT_VERSION = 4;
+export const CURRENT_VERSION = 5;
 
 const V1_TIER_NAMES = {
 	easy: Grid.Tier.EASY,
@@ -37,6 +41,9 @@ const V1_TIER_NAMES = {
 	expert: Grid.Tier.EXPERT,
 };
 const V1_MARKS = [".", "x", "c"];
+
+/** Lives a v4 level started with, which its sessions counted down from. */
+const V4_LIVES = 3;
 
 export function migrate(data) {
 	let version = Number(data?.version ?? 0);
@@ -52,6 +59,7 @@ export function migrate(data) {
 		if (version === 1) document = migrateV1ToV2(document);
 		else if (version === 2) document = migrateV2ToV3(document);
 		else if (version === 3) document = migrateV3ToV4(document);
+		else if (version === 4) document = migrateV4ToV5(document);
 		else return emptyDocument();
 		version = Number(document.version ?? CURRENT_VERSION);
 	}
@@ -71,7 +79,18 @@ export function emptyStats() {
 		hints_used: 0,
 		progress: emptyProgress(),
 		seen: emptySeen(),
+		run: emptyRun(),
+		high_score: 0,
 	};
+}
+
+/**
+ * The run in progress: the score so far and the lives left to spend on it. Both
+ * outlive the level being played, and both are reset together when the last life
+ * goes.
+ */
+export function emptyRun() {
+	return { score: 0, lives: MAX_LIVES };
 }
 
 /** Levels cleared in a row without running out of lives. */
@@ -92,7 +111,7 @@ export function emptySeen() {
 
 /**
  * `level` is the furthest the player has reached and only ever climbs. `playing`
- * is the level they are on now, which a difficulty button can move backwards.
+ * is the level they are on now.
  */
 export function emptyProgress() {
 	return { level: Ladder.FIRST_LEVEL, playing: Ladder.FIRST_LEVEL, completed: 0 };
@@ -142,6 +161,19 @@ export function normalize(document) {
 		}
 	}
 	if (!("hints_used" in stats)) stats.hints_used = 0;
+	if (!isObject(stats.run)) {
+		stats.run = emptyRun();
+	} else {
+		const defaults = emptyRun();
+		for (const field of Object.keys(defaults)) {
+			if (!(field in stats.run)) stats.run[field] = defaults[field];
+		}
+	}
+	// A hand-edited save could hold more lives than the rules allow, or a negative
+	// score. Clamping here means nothing downstream has to re-check.
+	stats.run.lives = Math.min(Math.max(Number(stats.run.lives), 0), MAX_LIVES);
+	stats.run.score = Math.max(Number(stats.run.score) || 0, 0);
+	stats.high_score = Math.max(Number(stats.high_score) || 0, stats.run.score);
 	// `seen` is purely a de-duplication convenience, so it needs no version bump:
 	// normalize() exists for exactly this, and the worst case of throwing an
 	// unrecognised shape away is that one board could repeat.
@@ -287,6 +319,34 @@ export function migrateV3ToV4(data) {
 	// unfinished puzzle is a smaller cost than resuming into a level that lies
 	// about where the player is.
 	document.session = {};
+	return document;
+}
+
+/**
+ * v4 gave every level its own three lives; v5 gives the run nine and scores it.
+ *
+ * The run starts full rather than inheriting anything. There is no score to
+ * carry over, and starting a scored run on a partly spent bar would penalise a
+ * player for mistakes made under rules that did not charge for them.
+ *
+ * A suspended level kept its lives left; what v5 wants from it is the mistakes
+ * already made on that board, which is what the old three were counting down.
+ */
+export function migrateV4ToV5(data) {
+	const document = structuredClone(data);
+	document.version = 5;
+
+	const stats = document.stats;
+	if (isObject(stats)) {
+		stats.run = emptyRun();
+		stats.high_score = 0;
+	}
+
+	const session = document.session;
+	if (isObject(session) && "lives" in session) {
+		session.mistakes = Math.max(V4_LIVES - Number(session.lives ?? V4_LIVES), 0);
+		delete session.lives;
+	}
 	return document;
 }
 

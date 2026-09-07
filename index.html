@@ -92,17 +92,17 @@
 		<div class="play-area">
 			<header class="header-row">
 				<span id="tier-label" class="tier">Level 1</span>
-				<span id="time-label" class="time">0:00</span>
+				<span id="score-label" class="score">
+					<b id="score-value">0</b>
+				</span>
 			</header>
 
-			<!-- Lives and score share a row of their own: nine hearts do not fit
+			<!-- Lives and the clock share a row of their own: nine hearts do not fit
 			     beside the level caption on a phone. The best score is the menu's
 			     to show. -->
 			<div class="run-row">
 				<span id="lives" class="lives" role="img" aria-label="9 of 9 lives left"></span>
-				<span id="score-label" class="score">
-					<b id="score-value">0</b>
-				</span>
+				<span id="time-label" class="time">0:00</span>
 			</div>
 
 			<!-- The grid keeps itself square, so the header packs directly above it

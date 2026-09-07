@@ -309,6 +309,19 @@ button:disabled {
 	font-weight: 700;
 }
 
+/* The beat on a score that has just gone up: the number swells and flashes,
+   then settles back at its own size and colour. */
+@keyframes score-rises {
+	0%   { scale: 1;    color: var(--ink); }
+	30%  { scale: 1.4;  color: var(--go-deep); }
+	65%  { scale: 1.08; color: var(--go-deep); }
+	100% { scale: 1;    color: var(--ink); }
+}
+
+.score b.is-rising {
+	animation: score-rises 480ms ease-out;
+}
+
 .lives {
 	display: flex;
 	gap: 0.22rem;
@@ -676,6 +689,11 @@ button:disabled {
 	}
 
 	.heart.is-returning {
+		animation: none;
+	}
+
+	/* The score still changes; the number just does not swell to say so. */
+	.score b.is-rising {
 		animation: none;
 	}
 }

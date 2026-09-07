@@ -66,6 +66,8 @@ export class GameScreen extends Emitter {
 		this._lifeFlightTimer = null;
 		/** Which button the result card is offering: the next level, or this one again. */
 		this._retryMode = false;
+		/** The figure on screen, so a rise can be told from a level's opening score. */
+		this._scoreShown = null;
 
 		this._wireBoard();
 		this._wireButtons();
@@ -150,6 +152,9 @@ export class GameScreen extends Emitter {
 		});
 		game.on("levelLoaded", () => {
 			this._resultPanel.hidden = true;
+			// The score the level opens with is whatever the run is carrying, and
+			// carrying it in is not scoring it.
+			this._scoreShown = null;
 			this._tierLabel.textContent = Ladder.describe(game.levelNumber);
 			this._showStatus("Tap or drag to cross out. Double tap to place a cat.");
 		});
@@ -158,7 +163,10 @@ export class GameScreen extends Emitter {
 		});
 		game.on("livesChanged", (remaining, total) => this._lives.set(remaining, total));
 		game.on("scoreChanged", (score) => {
+			const rose = this._scoreShown !== null && score > this._scoreShown;
+			this._scoreShown = score;
 			this._scoreValue.textContent = String(score);
+			if (rose) this._pulseScore();
 		});
 		game.on("wrongCat", (_index, message) => this._showStatus(message));
 		game.on("catsChanged", (placed, total) => {
@@ -200,6 +208,21 @@ export class GameScreen extends Emitter {
 			this._resultLives.set(game.livesLeft, MAX_LIVES);
 			this._againButton.focus();
 		});
+	}
+
+	/**
+	 * The beat on a score that has just gone up.
+	 *
+	 * The class is stripped and the element measured before it goes back on: a
+	 * running animation would otherwise ignore being asked to start again, and two
+	 * cats placed in quick succession would only be worth one flash.
+	 */
+	_pulseScore() {
+		this._scoreValue.classList.remove("is-rising");
+		void this._scoreValue.offsetWidth;
+		this._scoreValue.classList.add("is-rising");
+		this._scoreValue.addEventListener("animationend",
+			() => this._scoreValue.classList.remove("is-rising"), { once: true });
 	}
 
 	/**

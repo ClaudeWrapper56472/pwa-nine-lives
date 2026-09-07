@@ -30,9 +30,10 @@ nothing and the level is no longer a clean one.
 
 ## Lives and score
 
-Every board is 10×10. What climbs is the reasoning: the techniques a level asks
-for ramp from Easy to Expert over the first 28 levels and stay at Expert after
-that. Finishing a level moves you up; losing one does not move you back.
+Every board is 10×10 and every board is Expert: it takes the whole technique
+set, locked groups included, to crack — from level one. Nothing about the board
+gets harder as you climb; what grows is the run you would lose. Finishing a level
+moves you up; losing one does not move you back.
 
 Lives and points belong to the **run**, not the level, so a wrong cat costs
 something beyond the board it happens on.

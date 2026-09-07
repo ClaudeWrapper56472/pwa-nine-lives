@@ -3,10 +3,10 @@ import * as Grid from "./grid.js";
 /**
  * Turns a level number into a board to generate.
  *
- * Every board is the same size. What climbs is the reasoning: the techniques a
- * level demands ramp from Easy to Expert over the first RAMP_LEVELS levels and
- * stay at Expert after that, so the player meets each new idea once they have
- * had some practice with the last one.
+ * Every level is the same board and the same tier: a 10x10 that takes the whole
+ * technique set to crack. Lives and score belong to the run, so a board that
+ * falls to forced singles costs the player nothing and decides nothing. What
+ * climbs with the level number is only how much a mistake has already cost.
  */
 
 export const FIRST_LEVEL = 1;
@@ -24,10 +24,10 @@ export const FIRST_LEVEL = 1;
 export const SIZE = 10;
 
 /**
- * How many levels the ramp takes to climb from Easy to Expert. Seven levels at
- * each of the four tiers.
+ * The tier every level is generated at: the rater has to reach for locked
+ * groups, its hardest technique, before the board gives way.
  */
-export const RAMP_LEVELS = 28;
+export const TIER = Grid.Tier.EXPERT;
 
 /**
  * From this level on, no colour may be a single square.
@@ -39,19 +39,13 @@ export const RAMP_LEVELS = 28;
  */
 export const NO_SINGLE_CELL_REGIONS_FROM = 150;
 
-export function tierFor(level) {
-	const climbed = Math.max(level, FIRST_LEVEL) - FIRST_LEVEL;
-	return Math.min(Math.floor(Grid.TIER_VALUES.length * climbed / RAMP_LEVELS),
-		Grid.Tier.EXPERT);
-}
-
 export function minRegionCells(level) {
 	return level >= NO_SINGLE_CELL_REGIONS_FROM ? 2 : 1;
 }
 
-/** Short caption for the top bar: "Level 7  ·  Medium 10x10". */
+/** Short caption for the top bar: "Level 7  ·  Expert 10x10". */
 export function describe(level) {
-	return `Level ${level}  ·  ${Grid.tierName(tierFor(level))} ${SIZE}×${SIZE}`;
+	return `Level ${level}  ·  ${Grid.tierName(TIER)} ${SIZE}×${SIZE}`;
 }
 
 /**
@@ -60,9 +54,8 @@ export function describe(level) {
 export function combinations() {
 	const out = [];
 	const seen = new Set();
-	const last = Math.max(RAMP_LEVELS, NO_SINGLE_CELL_REGIONS_FROM);
-	for (let level = FIRST_LEVEL; level <= last; level += 1) {
-		const spec = { tier: tierFor(level), size: SIZE, minRegion: minRegionCells(level) };
+	for (let level = FIRST_LEVEL; level <= NO_SINGLE_CELL_REGIONS_FROM; level += 1) {
+		const spec = { tier: TIER, size: SIZE, minRegion: minRegionCells(level) };
 		const key = `${spec.tier}:${spec.minRegion}`;
 		if (seen.has(key)) continue;
 		seen.add(key);

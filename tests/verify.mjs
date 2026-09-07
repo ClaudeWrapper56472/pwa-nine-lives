@@ -124,40 +124,22 @@ group("Solver");
 
 group("Ladder");
 {
-	eq("level 1 is Easy", Ladder.tierFor(Ladder.FIRST_LEVEL), Grid.Tier.EASY);
+	eq("every level is Expert", Ladder.TIER, Grid.Tier.EXPERT);
 	eq("the board is a 10x10", Ladder.SIZE, 10);
 	check("and one the grid can build",
 		Ladder.SIZE >= Grid.MIN_SIZE && Ladder.SIZE <= Grid.MAX_SIZE);
 
-	for (const [level, tier] of Object.entries({
-		1: Grid.Tier.EASY,
-		8: Grid.Tier.MEDIUM,
-		15: Grid.Tier.HARD,
-		22: Grid.Tier.EXPERT,
-	})) {
-		eq(`level ${level} is ${Grid.tierName(tier)}`, Ladder.tierFor(Number(level)), tier);
-	}
+	check("every board the ladder asks for is Expert and the one size",
+		Ladder.combinations().every((spec) =>
+			spec.tier === Grid.Tier.EXPERT && spec.size === Ladder.SIZE));
 
-	let ramps = true;
-	let lastTier = -1;
-	for (let level = Ladder.FIRST_LEVEL; level < 400; level += 1) {
-		const tier = Ladder.tierFor(level);
-		if (tier < lastTier || tier > Grid.Tier.EXPERT) ramps = false;
-		lastTier = tier;
-	}
-	check("the tier climbs without dipping and stops at Expert", ramps);
-
-	eq("the ramp reaches Expert on its last level",
-		Ladder.tierFor(Ladder.RAMP_LEVELS), Grid.Tier.EXPERT);
-	eq("and stays there however far the levels run",
-		Ladder.tierFor(5100), Grid.Tier.EXPERT);
 	eq("single-square colours stop at the advertised level",
 		Ladder.minRegionCells(Ladder.NO_SINGLE_CELL_REGIONS_FROM), 2);
 	eq("and are allowed before it",
 		Ladder.minRegionCells(Ladder.NO_SINGLE_CELL_REGIONS_FROM - 1), 1);
 
-	check("every board the ladder asks for is the one size",
-		Ladder.combinations().every((spec) => spec.size === Ladder.SIZE));
+	check("the caption names the tier and the size",
+		Ladder.describe(7) === `Level 7  ·  Expert 10×10`);
 }
 
 // --- Rating -----------------------------------------------------------------

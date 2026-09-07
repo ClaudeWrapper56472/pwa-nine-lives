@@ -91,7 +91,7 @@ export class GameState extends Emitter {
 		this.history = new UndoStack();
 
 		this.levelNumber = Ladder.FIRST_LEVEL;
-		this.tier = Grid.Tier.EASY;
+		this.tier = Ladder.TIER;
 		this.seed = 0;
 		this.selected = -1;
 		this.livesLeft = saveManager.runLives();
@@ -290,7 +290,7 @@ export class GameState extends Emitter {
 		this.history.fromJSON(session.history ?? {});
 
 		this.levelNumber = Math.max(Number(session.level ?? Ladder.FIRST_LEVEL), Ladder.FIRST_LEVEL);
-		this.tier = Number(session.tier ?? Grid.Tier.EASY);
+		this.tier = Number(session.tier ?? Ladder.TIER);
 		this.seed = Number(session.seed ?? 0);
 		this._adoptRun();
 		this.mistakesMade = Number(session.mistakes ?? 0);

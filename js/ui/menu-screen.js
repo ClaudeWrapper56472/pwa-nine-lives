@@ -65,7 +65,7 @@ export class MenuScreen extends Emitter {
 		this._furthestButton.hidden = furthest === carryingOn;
 		if (this._furthestButton.hidden) return;
 		this._furthestButton.textContent =
-			`Back to level ${furthest}  ·  ${Grid.tierName(Ladder.tierFor(furthest))}`;
+			`Back to level ${furthest}  ·  ${Grid.tierName(Ladder.TIER)}`;
 	}
 
 	_renderStats() {
@@ -76,7 +76,7 @@ export class MenuScreen extends Emitter {
 		const bestRun = Number(streak.best ?? 0);
 
 		const lines = [
-			`On level ${level}  ·  ${Grid.tierName(Ladder.tierFor(level))} ${Ladder.SIZE}×${Ladder.SIZE}`,
+			`On level ${level}  ·  ${Grid.tierName(Ladder.TIER)} ${Ladder.SIZE}×${Ladder.SIZE}`,
 			`Score ${this.save.runScore()}  ·  best ${this.save.highScore()}`,
 			`${this.save.runLives()} of ${MAX_LIVES} lives`,
 			`${completed} level${completed === 1 ? "" : "s"} finished`,

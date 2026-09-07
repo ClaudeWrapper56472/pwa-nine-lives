@@ -11,11 +11,10 @@ import { CatLevel } from "./puzzle/level.js";
  * browser.
  */
 export async function buildLevel(targetLevel, seenList) {
-	const tier = Ladder.tierFor(targetLevel);
 	const minRegion = Ladder.minRegionCells(targetLevel);
 	const seen = new Set(seenList.map(Number));
 	// Seed 0 means draw a fresh one.
-	return Generator.generate(tier, 0, Generator.DEFAULT_MAX_ATTEMPTS, Ladder.SIZE,
+	return Generator.generate(Ladder.TIER, 0, Generator.DEFAULT_MAX_ATTEMPTS, Ladder.SIZE,
 		seen, minRegion);
 }
 

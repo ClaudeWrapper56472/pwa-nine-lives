@@ -23,6 +23,11 @@ first of the two taps crosses the cell out, so a cat shows a cross for a moment 
 its way down — the alternative is every cross waiting to see whether a second tap
 follows, and crossing out is far too common to make it wait.
 
+A cat that lands is right, because a wrong one is refused rather than placed, so
+nothing takes it back: **Undo** and **Clear** work on your crosses only. **Hint**
+places one cat for you, once per level. It spends no life, but that cat scores
+nothing and the level is no longer a clean one.
+
 ## Lives and score
 
 Every board is 10×10. What climbs is the reasoning: the techniques a level asks
@@ -49,9 +54,10 @@ already spent on it stays spent, and a hint already taken stays taken. Otherwise
 restarting would buy back the clean bonus for nothing.
 
 **Keyboard:** arrows move, `Space`/`X` crosses out, `Enter`/`C` places a cat,
-`Backspace` clears, `H` hints, `Cmd`/`Ctrl`+`Z` undoes, `Esc` leaves. The selected
-cell is outlined while you are playing by key; a tap puts the outline away again.
-Right-click is the mouse's one-press way to place a cat.
+`Backspace` clears, `H` hints, `Cmd`/`Ctrl`+`Z` undoes and `Shift` with it redoes,
+`Esc` leaves. The selected cell is outlined while you are playing by key; a tap
+puts the outline away again. Right-click is the mouse's one-press way to place a
+cat.
 
 ## Running it
 
@@ -59,7 +65,7 @@ Modules, workers and the service worker all need a real origin, so open it over
 HTTP rather than as a file:
 
 ```bash
-cd ~/Sites/pwa-meowdoku
+cd ~/Sites/pwa-nine-lives
 python3 -m http.server 8000
 # then http://localhost:8000
 ```
@@ -157,16 +163,14 @@ corner radius, outline width and the cat's overhang from the cell's pixel size
 inside `_draw()`. `BoardView` measures the board once and publishes `--cell` and
 `--gap`, and every one of those rules is a `calc()` off those two numbers.
 
-Placing a cat is a hold rather than a double-tap. A double-tap has to cross the
-cell out on the first tap, because nothing at that moment knows a second is
-coming, and then paint the cat over it -- so the cross visibly flashes on and off
-under the move replacing it, and lands on the undo stack having never been asked
-for. A hold fires before anything is released, so no tap ever happens.
+A double tap is timed here rather than handed over as a gesture: `BoardView`
+pairs two releases on the same cell inside 300 ms, and the board cancels
+`touchend` because iOS zooms on a double tap whatever `touch-action` says.
 
-The drag also gained an axis. The original locked a run to the row it started
-in; here the first cell the drag reaches decides row or column, which keeps the
-same protection against a careless swipe wiping a diagonal while making vertical
-runs possible.
+The drag gained an axis. The original locked a run to the row it started in; here
+the first cell the drag reaches decides row or column, which keeps the same
+protection against a careless swipe wiping a diagonal while making vertical runs
+possible.
 
 ### One bug fixed rather than reproduced
 
@@ -183,7 +187,9 @@ ever fires on a stale record.
 
 ## Deliberate omissions
 
-- **No sound, no animation.** The cats are static.
+- **No sound.** Two things move: a cat pounces as it lands, and a life earned
+  back flies into its slot on the result card. Both stop under
+  `prefers-reduced-motion`.
 - **No tutorial.** The rules fit in one line, which the game screen shows on load.
 - **No level select.** You are on a level; you play that level.
 - **No settings screen.** `Settings` has the plumbing and no options to show yet.

@@ -14,15 +14,11 @@
  *     A A D B     C green               row 2 -> col 3
  *     A D D B     D rose                row 3 -> col 1
  */
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-
 import * as Grid from "../js/puzzle/grid.js";
 import * as Solver from "../js/puzzle/solver.js";
 import * as Rater from "../js/puzzle/rater.js";
 import * as Generator from "../js/puzzle/generator.js";
 import * as Ladder from "../js/puzzle/ladder.js";
-import * as Bank from "../js/puzzle/bank.js";
 import * as Migration from "../js/save-migration.js";
 import { MAX_LIVES, POINTS_PER_CAT, POINTS_PER_LEVEL } from "../js/scoring.js";
 import { CatLevel } from "../js/puzzle/level.js";
@@ -64,13 +60,6 @@ function eq(message, actual, expected) {
 }
 
 const tutorialRegions = () => Grid.regionsFromString(TUTORIAL_REGIONS);
-
-/** Cells in the smallest colour of a stored region string. */
-function smallestRegion(regions) {
-	const counts = new Map();
-	for (const ch of regions) counts.set(ch, (counts.get(ch) ?? 0) + 1);
-	return Math.min(...counts.values());
-}
 
 // --- The rules --------------------------------------------------------------
 
@@ -268,61 +257,28 @@ group("Tier claims");
 	check(`a level solves at its own tier and no lower (${checked} levels)`, honest && checked > 0);
 }
 
-// --- The shipped bank -------------------------------------------------------
+// --- What the ladder asks for -----------------------------------------------
 
-group("Level bank");
+group("Ladder demands");
 {
-	const path = fileURLToPath(new URL("../content/level_bank.json", import.meta.url));
-	const document = JSON.parse(readFileSync(path, "utf8"));
-	Bank.seed(document);
-
-	let total = 0;
-	let legal = true;
-	let unique = true;
-	let rated = true;
-	let connected = true;
-	for (const tier of Grid.TIER_VALUES) {
-		for (const entry of Bank.entriesFor(tier)) {
-			total += 1;
-			const level = CatLevel.fromJSON(entry);
-			if (level === null || !Grid.isValidSolution(level.size, level.regions, level.columns)) {
-				legal = false;
-				continue;
-			}
-			if (!Grid.regionsAreConnected(level.size, level.regions)) connected = false;
-			if (!Solver.hasUniqueSolution(level.size, level.regions,
-				Solver.openConstraints(level.size))) unique = false;
-			const rating = Rater.rate(level);
-			if (!rating.solved || rating.tier !== tier) rated = false;
+	// Generation is the only way a player gets a board, so every board the ladder
+	// can ask for has to come back on demand, on tier, and inside the attempt
+	// budget. A spec that cannot be met is a level the player never gets past.
+	let met = true;
+	for (const spec of Ladder.combinations()) {
+		const level = Generator.generate(spec.tier, 0, Generator.DEFAULT_MAX_ATTEMPTS,
+			spec.size, new Set(), spec.minRegion);
+		const ok = level !== null && level.tier === spec.tier && level.size === spec.size
+			&& level.smallestRegion() >= spec.minRegion;
+		if (!ok) {
+			met = false;
+			process.stdout.write(`         tier ${spec.tier}, ${spec.size}x${spec.size},`
+				+ ` colours of ${spec.minRegion}+ came back `
+				+ `${level === null ? "empty" : `as tier ${level.tier}`}\n`);
 		}
 	}
-	check(`the bank holds levels (${total})`, total > 0);
-	check("every shipped level is a legal placement", legal);
-	check("every shipped level has exactly one solution", unique);
-	check("every shipped region is one connected blob", connected);
-	check("every shipped level rates to the tier it is filed under", rated);
-
-	// Every board the ladder can ask for must be in the bank, or a player hits a
-	// stutter while the game generates one live. The minimum colour size counts:
-	// past NO_SINGLE_CELL_REGIONS_FROM the bank is filtered down to the entries
-	// that have no one-square colour, and those have to exist.
-	let covered = true;
-	for (const spec of Ladder.combinations()) {
-		const found = Bank.entriesFor(spec.tier).some((entry) =>
-			Number(entry.size) === spec.size
-			&& smallestRegion(String(entry.regions ?? "")) >= spec.minRegion);
-		if (!found) covered = false;
-	}
-	check("the bank covers every board the ladder asks for", covered);
-
-	const rng = new Rng(4242);
-	const drawn = Bank.take(Grid.Tier.HARD, rng, Ladder.SIZE);
-	check("a level can be drawn from the bank",
-		drawn !== null && drawn.size === Ladder.SIZE);
-	const fingerprint = drawn.fingerprint();
-	const again = Bank.take(Grid.Tier.HARD, rng, Ladder.SIZE, new Set([fingerprint]));
-	check("and a board already seen is skipped",
-		again !== null && again.fingerprint() !== fingerprint);
+	check(`every board the ladder asks for can be generated `
+		+ `(${Ladder.combinations().length} kinds)`, met);
 }
 
 // --- Commands and undo ------------------------------------------------------

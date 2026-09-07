@@ -28,7 +28,7 @@ jobs:
         with:
           node-version: 20
       # No dependencies to install: the suite is plain Node and runs the whole
-      # puzzle layer, the shipped level bank included.
+      # puzzle layer.
       - run: node tests/verify.mjs
 
   deploy:
@@ -48,7 +48,7 @@ jobs:
       - name: Collect the app
         run: |
           mkdir _site
-          cp -r index.html manifest.webmanifest sw.js css js art icons content _site/
+          cp -r index.html manifest.webmanifest sw.js css js art icons _site/
       - uses: actions/upload-pages-artifact@v5
         with:
           path: _site

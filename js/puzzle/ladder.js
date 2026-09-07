@@ -55,8 +55,7 @@ export function describe(level) {
 }
 
 /**
- * Every board the ladder can ask for, as {tier, size, minimum colour size}. The
- * shipped bank covers exactly what players will actually be served.
+ * Every board the ladder can ask for, as {tier, size, minimum colour size}.
  */
 export function combinations() {
 	const out = [];

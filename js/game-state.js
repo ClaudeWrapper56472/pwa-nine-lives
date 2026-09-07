@@ -111,11 +111,10 @@ export class GameState extends Emitter {
 		/**
 		 * The next level, built while the player works on the current one.
 		 *
-		 * Carving a unique 10x10 Expert board takes seconds, and the shipped bank
-		 * holds only so many -- past level 111 or so it runs dry and every level is
-		 * generated live. Rather than make the player watch a spinner, the next
-		 * board is built in the background the moment the current one loads. By the
-		 * time they finish, it is already waiting.
+		 * Carving a unique 10x10 Expert board takes seconds. Rather than make the
+		 * player watch a spinner, the next board is built in the background the
+		 * moment the current one loads. By the time they finish, it is already
+		 * waiting.
 		 */
 		this._prefetched = null;
 		this._prefetchedFor = 0;

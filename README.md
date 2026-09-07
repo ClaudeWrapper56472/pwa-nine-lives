@@ -108,7 +108,6 @@ js/puzzle/               Pure puzzle logic. No DOM, so it all runs under Node.
   generator.js           Placement, region carving, uniqueness repair
   rater.js               Technique-by-technique logical solver
   ladder.js              Level number -> which tier to generate
-  bank.js                Reads precomputed levels from content/
 
 js/commands/             Undo system
   command.js             Base class
@@ -124,14 +123,13 @@ js/
   save-migration.js      Pure version-migration functions
   scoring.js             Lives and point values, shared by the game and the save
   settings.js            Preferences
-  builder.js             Bank-then-generate, shared by page and worker
+  builder.js             Level number -> a fresh level, shared by page and worker
   worker.js              Level generation off the main thread
   util/emitter.js        Named events, the stand-in for Godot signals
   util/rng.js            Seeded PCG32
   ui/                    palette.js, board.js, lives.js, menu-screen.js,
                          game-screen.js, main.js
 
-content/level_bank.json  320 precomputed levels (data, not code)
 art/, icons/             The cat, the mascot, the app icons
 tests/verify.mjs         Self-check for the puzzle layer
 .github/workflows/       Self-check on every push; deploy to Pages from main
@@ -140,8 +138,8 @@ tests/verify.mjs         Self-check for the puzzle layer
 ## What the port changed
 
 The puzzle layer is a direct translation — same algorithms, same constants, same
-save format at version 4, so the shipped level bank is used unmodified. What had
-to move is everything that touched the engine.
+save format at version 4. What had to move is everything that touched the
+engine.
 
 | Godot | Here |
 |---|---|
@@ -156,7 +154,6 @@ to move is everything that touched the engine.
 | `Vector2i` cells in the rater | Packed `row * size + col` indices |
 | `Theme` resource plus `palette.gd` | Custom properties in the stylesheet plus `ui/palette.js` |
 | `AspectRatioContainer` and `SquareSlot` | `aspect-ratio: 1` on the grid |
-| `tools/build_level_bank.gd` | Not ported. The bank is shipped content; regenerate it in the Godot project. |
 
 Cell metrics are the one place the drawing model shows through. Godot computed
 corner radius, outline width and the cat's overhang from the cell's pixel size

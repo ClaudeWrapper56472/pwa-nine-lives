@@ -1,9 +1,9 @@
 /**
  * Offline play.
  *
- * Everything the game needs is static and small -- the level bank is the largest
- * file at about 48 KB -- so the whole app is precached on install. A puzzle you
- * can already play should not stop working because the train went into a tunnel.
+ * Everything the game needs is static and small, so the whole app is precached
+ * on install. A puzzle you can already play should not stop working because the
+ * train went into a tunnel.
  *
  * Two strategies, split by what goes wrong when a file is stale.
  *
@@ -14,10 +14,10 @@
  * whatever it captured until someone remembers to bump the string, and a stale
  * mix of modules fails in ways that look like the app is simply broken.
  *
- * Content -- the art, the icons, the level bank -- is served cache-first. It is
- * the bulk of the bytes and it only changes when its filename does.
+ * Content -- the art and the icons -- is served cache-first. It is the bulk of
+ * the bytes and it only changes when its filename does.
  */
-const CACHE = "nine-lives-v5";
+const CACHE = "nine-lives-v6";
 
 /** Files whose freshness matters more than the round trip to check it. */
 const CODE = /\.(?:html|js|css|webmanifest)$/;
@@ -33,7 +33,6 @@ const ASSETS = [
 	"icons/icon-192.png",
 	"icons/icon-512.png",
 	"icons/icon-1024.png",
-	"content/level_bank.json",
 	"js/builder.js",
 	"js/game-state.js",
 	"js/puzzle-state.js",
@@ -47,7 +46,6 @@ const ASSETS = [
 	"js/commands/cross-run-command.js",
 	"js/commands/set-mark-command.js",
 	"js/commands/undo-stack.js",
-	"js/puzzle/bank.js",
 	"js/puzzle/generator.js",
 	"js/puzzle/grid.js",
 	"js/puzzle/ladder.js",

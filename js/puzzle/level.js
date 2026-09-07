@@ -14,7 +14,7 @@ export class CatLevel {
 		this.tier = Grid.Tier.EASY;
 		this.seed = 0;
 		this.attempts = 0;
-		this.rating = null; // a Rating, or null when it came from the bank unrated
+		this.rating = null; // a Rating, or null when nothing has rated it
 	}
 
 	regionAt(row, col) {
